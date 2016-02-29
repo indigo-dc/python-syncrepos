@@ -31,47 +31,68 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys, time
-from daemon import Daemon
-from bottle import route, run, template
+from bottle import post, request, HTTPError, run, response
+from config import Config
+import logging
+import json
+import os
 
-
-
-@route('/hello/<name>')
-def index(name):
-    return template('<b>Hello {{name}}</b>!', name=name)
-
-
-"""
-class DaemonSyncRepo(Daemon):
-    #run(host='localhost', port=8080)
-    def run(self):
-                while True:
-                        time.sleep(1)
-
-
-def init():
-    daemon = DaemonSyncRepo('/tmp/daemon-example.pid')
-    if len(sys.argv) == 2:
-        if 'start' == sys.argv[1]:
-            daemon.start()
-        elif 'stop' == sys.argv[1]:
-            daemon.stop()
-        elif 'restart' == sys.argv[1]:
-            daemon.restart()
+# curl -i -H \"Accept: application/json\" -H \"Content-Type: application/json\" -X POST -d "{\"callback_url\":
+# \"https://registry.hub.docker.com/u/svendowideit/busybox/hook/2141bc0cdec4hebec411i4c1g40242eg110020/\",
+# \"push_data\": {\"images\": [\"27d47432a69bca5f2700e4dff7de0388ed65f9d3fb1ec645e2bc24c223dc1cc3\",
+# \"51a9c7c1f8bb2fa19bcd09789a34e63f35abb80044bc10196e304f6634cc582c\"],\"pushed_at\": 1.417566822e+09,\"pusher\":
+# \"svendowideit\"},\"repository\": {\"comment_count\": 0,\"date_created\": 1.417566665e+09,\"description\": \"\",
+# \"full_description\": \"webhook triggered from a 'docker push'\",\"is_official\": false,\"is_private\":
+# false,\"is_trusted\": false,\"name\": \"busybox\",\"namespace\": \"svendowideit\",\"owner\": \"svendowideit\",
+# \"repo_name\": \"svendowideit/busybox\",\"repo_url\": \"https://registry.hub.docker.com/u/svendowideit/busybox/\",
+# \"star_count\": 0,\"status\": \"Active\"}" http://localhost:8080/synch -v
+@post('/synch')
+def sync_repo():
+    try:
+        #print request.body.read()
+        if  os.system('dpkg -l|grep opennebula')== 0:
+            logging.info('OpenNebula has been detected as Cloud Provider ...')
+            update_one(request)
+            msg = 'Synchronized OpenNebula onedock datastore with Docker Hub repository'
+        elif os.system('dpkg -l|grep openstack') == 0 :
+            logging.info('OpenStack has been detected as Cloud Provider ...')
+            update_ostack(request)
+            msg = 'Synchronized OpenStack glance with Docker Hub repository'
         else:
-            print "Unknown command"
-            sys.exit(2)
-        sys.exit(0)
-    else:
-        print "usage: %s start|stop|restart" % sys.argv[0]
-        sys.exit(2)
+            msg = 'Something is wrong, the API was not able to detect the cloud provider ...'
+            logging.error(msg)
+            raise Exception(msg)
+        result = {'state': 'success', 'description': msg,'context': 'reposynch',
+        'target_url': target_url }
+        response.content_type = 'application/json'
+        return json.dumps(result)
+    except Exception, e:
+        response.content_type = 'application/json'
+        error = {'state': 'error', 'description': e.message,'context': 'Synch-Repos',
+        'target_url': target_url }
+        return json.dumps(error)
 
-"""
+
+def update_one(request):
+    #TODO-Create template per image:tag, look for the current images in onedock datastore, if the image exists does not
+    #TODO-do anything, otherwise create template in a specific folder to keep track of all updates and create new
+    #TODO-image in ONE
+    os.system('ls')
+
+
+def update_ostack(request):
+    #TODO-Research how is it
+    os.system('ls')
+
 
 
 def init():
-    run(host='localhost', port=8080)
+    path = os.path.dirname(os.path.abspath(__file__))
+    f = file('%s/reposynch.cfg' %path)
+    cfg = Config(f)
+    global target_url
+    target_url = 'http://%s:%s/synch' %(cfg.api_endpoint, cfg.api_port)
+    run(host=cfg.api_endpoint, port=cfg.api_port)
 
 if __name__ == "__main__":
     init()
