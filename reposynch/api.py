@@ -36,6 +36,9 @@ from config import Config
 import logging
 import json
 import os
+import datetime
+
+now = datetime.datetime.now()
 
 # curl -i -H \"Accept: application/json\" -H \"Content-Type: application/json\" -X POST -d "{\"callback_url\":
 # \"https://registry.hub.docker.com/u/svendowideit/busybox/hook/2141bc0cdec4hebec411i4c1g40242eg110020/\",
@@ -50,25 +53,30 @@ import os
 def sync_repo():
     try:
         #print request.body.read()
+        log_filename = 'reposynch.log'
+        logging.basicConfig(filename=log_filename,level=logging.INFO)
         if  os.system('dpkg -l|grep opennebula')== 0:
-            logging.info('OpenNebula has been detected as Cloud Provider ...')
+            logging.info(' {} : OpenNebula has been detected as Cloud Provider ...'.
+                         format(str(now.strftime("%Y-%m-%d %H:%M"))))
             update_one(request)
             msg = 'Synchronized OpenNebula onedock datastore with Docker Hub repository'
         elif os.system('dpkg -l|grep openstack') == 0 :
-            logging.info('OpenStack has been detected as Cloud Provider ...')
+            logging.info(' {} : OpenStack has been detected as Cloud Provider ...'.
+                         format(str(now.strftime("%Y-%m-%d %H:%M"))))
             update_ostack(request)
             msg = 'Synchronized OpenStack glance with Docker Hub repository'
         else:
             msg = 'Something is wrong, the API was not able to detect the cloud provider ...'
-            logging.error(msg)
+            logging.error(msg.format(str(now.strftime("%Y-%m-%d %H:%M"))))
             raise Exception(msg)
         result = {'state': 'success', 'description': msg,'context': 'reposynch',
         'target_url': target_url }
         response.content_type = 'application/json'
         return json.dumps(result)
     except Exception, e:
+        logging.error(e.message.format(str(now.strftime("%Y-%m-%d %H:%M"))))
         response.content_type = 'application/json'
-        error = {'state': 'error', 'description': e.message,'context': 'Synch-Repos',
+        error = {'state': 'error', 'description': e.message,'context': 'reposynch',
         'target_url': target_url }
         return json.dumps(error)
 
@@ -81,7 +89,7 @@ def update_one(request):
 
 
 def update_ostack(request):
-    #TODO-Research how is it
+    #TODO-Research how is it in glance
     os.system('ls')
 
 
