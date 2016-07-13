@@ -1,4 +1,0 @@
-argparse
-six
-bottle
-config
